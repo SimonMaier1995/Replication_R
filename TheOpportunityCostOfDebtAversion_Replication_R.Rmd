@@ -1,0 +1,948 @@
+---
+title: "The Opportunity Cost of Debt Aversion - Replication"
+author: "Repliconomics"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Loading Libraries
+
+```{r Libraries}
+library(haven)
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+library(fixest)
+library(modelsummary)
+library(forcats)
+library(kableExtra)
+```
+
+## Figure 1 - Allocation Shares of the Intial Endowment in Day 1
+
+```{r Figure 1}
+
+data <- read_dta("data/main_work.dta")
+
+data <- data %>%
+  mutate(
+    share_a1_initial = share_pointssaving1,
+    share_a2_initial = share_pointssaving2,
+    share_a3_initial = ifelse(treatment != 0, share_pointsdebt1, share_pointssaving3),
+    share_a4_initial = ifelse(treatment != 0, share_pointsdebt2, share_pointssaving4),
+    auxiliar11 = NA,
+    treatmentLabel = case_when(
+      treatment == 1 ~ "Low Debt",
+      treatment == 0 ~ "No Debt",
+      TRUE ~ "."
+    )
+  )
+
+fig1.dat = data %>%
+  select(share_a1_initial, share_a2_initial, share_a3_initial, share_a4_initial, treatment, day) %>%
+  filter(treatment <= 1 & day == 1) %>%
+  group_by(treatment) %>%
+  summarise(
+    share_a1_initial = mean(share_a1_initial),
+    share_a2_initial = mean(share_a2_initial),
+    share_a3_initial = mean(share_a3_initial),
+    share_a4_initial = mean(share_a4_initial)
+  ) %>%
+  pivot_longer(cols = c(share_a1_initial, share_a2_initial, share_a3_initial, share_a4_initial), names_to = "account", values_to = "share")
+
+fig1.dat$treatment = ifelse(fig1.dat$treatment == 0, "No debt", "Low debt")
+
+fig1.dat$account = case_when(
+  fig1.dat$account == "share_a1_initial" ~ "Savings 1 (20%)",
+  fig1.dat$account == "share_a2_initial" ~ "Savings 2 (10%)",
+  fig1.dat$account == "share_a3_initial" ~ "Savings 3 / Debt 1 (15%)",
+  fig1.dat$account == "share_a4_initial" ~ "Savings 4 / Debt 2 (5%)"
+)
+
+fig1.dat$treatment = fig1.dat$treatment %>%
+  fct_relevel("No debt", "Low debt")
+
+ggplot(fig1.dat, aes(x = treatment, y = share, fill = account)) +
+  geom_col(position = position_dodge2()) +
+  labs(x = NULL, y = "Inital allocation share", fill = NULL, title = "Figure 1: Allocation of Shares of the Initial Endowment in Day 1") +
+  theme(legend.position = c(0.75,0.8), legend.box.background = element_rect(size = 1)) +
+  geom_text(aes(label=round(share, 2)), position=position_dodge(width=0.9), vjust=-0.25, size = 3) +
+  scale_fill_manual(values = c("#476a90", "#5f9786", "#a33f49", "#be7c71")) +
+  scale_y_continuous(labels = scales::number_format(accuracy = 0.1), limits = c(0,1))
+
+```
+
+## Figure 2 - Percent of Subjects That Maximize Returns in All Decisions
+
+```{r Figure 2}
+
+data <- read_dta("data/main_work.dta")
+
+fig2.dat = data %>%
+  filter(day == 4)
+
+fig2.dat <- fig2.dat %>%
+  mutate(counter = 1)
+
+fig2.model <- lm(ind_optimal_ia_all ~ factor(treatment), data = fig2.dat %>% filter(treatment <= 1))
+summary(fig2.model, conf.int = TRUE)
+
+confint(fig2.model)
+
+
+fig2.dat.collapsed <- fig2.dat %>%
+  group_by(treatment) %>%
+  summarise(mean_optimal = mean(ind_optimal_ia_all, na.rm = TRUE),
+            sd_optimal = sd(ind_optimal_ia_all, na.rm = TRUE),
+            n = sum(counter))
+
+fig2.dat.collapsed <- fig2.dat.collapsed %>%
+  mutate(hiwrite = ifelse(treatment == 1, (.3837209 - .255814) + (.3821267 - .255814), NA),
+         lowrite = ifelse(treatment == 1, (.3837209 - .255814) - (.255814 - .1295012), NA))
+
+fig2.dat.collapsed <- fig2.dat.collapsed %>%
+  mutate(spacing = ifelse(treatment == 0, 0.2, ifelse(treatment == 1, 0.8, NA)))
+
+fig2.dat.plot <- fig2.dat.collapsed %>%
+  mutate(text_label = ifelse(spacing == 0.2, ".38", ".13")) %>%
+  filter(!is.na(mean_optimal) & !is.na(spacing))
+
+ggplot(fig2.dat.plot, aes(x = spacing, y = mean_optimal, fill = factor(spacing))) +
+  geom_bar(stat = "identity", width = 0.3) +
+  scale_fill_manual(values = c("0.2" = "#476a90", "0.8" = "#a33f49")) +
+  geom_errorbar(aes(ymin = lowrite, ymax = hiwrite), width = 0.1, color = "black") +
+  scale_x_continuous(breaks = c(0.2, 0.8), labels = c("No-Debt", "Low-Debt")) +
+  scale_y_continuous(limits = c(0, 0.5), breaks = seq(0, 0.5, by = 0.1)) +
+  geom_text(aes(label=round(mean_optimal, 2)), position=position_dodge(width=0.9), vjust=-0.25, size = 3) +
+  labs(y = "Percent of Subjects", x = NULL, title = "Figure 2: Percent of Subjects That Maximize Returns in All Decisions") +
+  theme(legend.position = "none")
+
+```
+
+## Figure 3 - Total Points Allocated to 15 Percent and 5 Percent Accounts
+
+```{r Figure 3}
+
+fig3.dat <- data %>%
+  group_by(idturk, treatment) %>%
+  summarise(tot_points_ia_a1 = sum(points_ia_a1, na.rm = TRUE),
+            tot_points_ia_a2 = sum(points_ia_a2, na.rm = TRUE),
+            tot_points_ia_a3 = sum(points_ia_a3, na.rm = TRUE),
+            tot_points_ia_a4 = sum(points_ia_a4, na.rm = TRUE),
+            tot_points_aa_a1 = sum(points_aa_a1, na.rm = TRUE),
+            tot_points_aa_a2 = sum(points_aa_a2, na.rm = TRUE),
+            tot_points_aa_a3 = sum(points_aa_a3, na.rm = TRUE),
+            tot_points_aa_a4 = sum(points_aa_a4, na.rm = TRUE),
+            .groups = 'drop')
+
+fig3.dat <- fig3.dat %>% 
+  filter(!is.na(treatment))
+
+fig3.dat <- fig3.dat %>%
+  mutate(tot_points_a1 = tot_points_ia_a1 + tot_points_aa_a1,
+         tot_points_a2 = tot_points_ia_a2 + tot_points_aa_a2,
+         tot_points_a3 = tot_points_ia_a3 + tot_points_aa_a3,
+         tot_points_a4 = tot_points_ia_a4 + tot_points_aa_a4)
+
+fig3.dat <- fig3.dat %>%
+  mutate(tot_points_a3_aux = tot_points_a3,
+         tot_points_a3_aux = ifelse(treatment == 1, tot_points_a3_aux+25,tot_points_a3_aux),
+         tot_points_a3_aux = tot_points_a3_aux - 50)
+
+### aux
+ggplot() +
+  geom_histogram(data = filter(fig3.dat, treatment == 0),
+                 aes(x = tot_points_a3_aux, y = ..count../sum(..count..)*100),
+                 binwidth = 100, fill = "#476a90", color = "#476a90", alpha = 0.5, position = "identity") +
+  geom_histogram(data = filter(fig3.dat, treatment == 1),
+                 aes(x = tot_points_a3_aux, y = ..count../sum(..count..)*100),
+                 binwidth = 100, fill = "#a33f49", color = "#a33f49", alpha = 0.5, position = "identity") +
+  scale_x_continuous(breaks = seq(0, 1500, by = 500)) +
+  scale_y_continuous(breaks = seq(0, 60, by = 10)) +
+  labs(y = "Percent of Subjects", x = "Points Allocated Savings 3 / Debt 1") +
+  geom_vline(xintercept = 912, linetype = "dashed", color = "#800000", linewidth = 0.4)
+
+### tot
+ggplot() +
+  geom_histogram(data = filter(fig3.dat, treatment == 0),
+                 aes(x = tot_points_a3, y = ..count../sum(..count..)*100),
+                 binwidth = 100, fill = "#476a90", color = "#476a90", alpha = 0.5, position = "dodge") +
+  geom_histogram(data = filter(fig3.dat, treatment == 1),
+                 aes(x = tot_points_a3, y = ..count../sum(..count..)*100),
+                 binwidth = 100, fill = "#a33f49", color = "#a33f49", alpha = 0.5, position = "dodge") +
+  scale_x_continuous(breaks = seq(0, 1500, by = 500)) +
+  scale_y_continuous(breaks = seq(0, 60, by = 10)) +
+  labs(y = "Percent of Subjects", x = "Points Allocated Savings 3 / Debt 1") +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  geom_vline(xintercept = 912, linetype = "dashed", color = "#800000", linewidth = 0.4)
+
+fig3.dat <- fig3.dat %>%
+  mutate(tot_points_a4_aux = tot_points_a4,
+         tot_points_a4_aux = ifelse(treatment == 1, tot_points_a4_aux+25,tot_points_a4_aux),
+         tot_points_a4_aux = tot_points_a4_aux - 50)
+
+### aux
+ggplot() +
+  geom_histogram(data = filter(fig3.dat, treatment == 0),
+                 aes(x = tot_points_a4_aux, y = ..count../sum(..count..)*100),
+                 binwidth = 100, fill = "#476a90", color = "#476a90", alpha = 0.5, position = "identity") +
+  geom_histogram(data = filter(fig3.dat, treatment == 1),
+                 aes(x = tot_points_a4_aux, y = ..count../sum(..count..)*100),
+                 binwidth = 100, fill = "#a33f49", color = "#a33f49", alpha = 0.5, position = "identity") +
+  scale_x_continuous(breaks = seq(0, 2500, by = 500)) +
+  scale_y_continuous(breaks = seq(0, 60, by = 10)) +
+  labs(y = "Percent of Subjects", x = "Points Allocated Savings 4 / Debt 1") +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  geom_vline(xintercept = 1512, linetype = "dashed", color = "#800000", linewidth = 0.4)
+
+### tot
+ggplot() +
+  geom_histogram(data = filter(fig3.dat, treatment == 0),
+                 aes(x = tot_points_a4, y = ..count../sum(..count..)*100),
+                 binwidth = 100, fill = "#476a90", color = "#476a90", alpha = 0.5, position = "dodge") +
+  geom_histogram(data = filter(fig3.dat, treatment == 1),
+                 aes(x = tot_points_a4, y = ..count../sum(..count..)*100),
+                 binwidth = 100, fill = "#a33f49", color = "#a33f49", alpha = 0.5, position = "dodge") +
+  scale_x_continuous(breaks = seq(0, 2500, by = 500)) +
+  scale_y_continuous(breaks = seq(0, 60, by = 10)) +
+  labs(y = "Percent of Subjects", x = "Points Allocated Savings 4 / Debt 1") +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  geom_vline(xintercept = 1512, linetype = "dashed", color = "#800000", linewidth = 0.4)
+
+```
+
+## Figure 4 - Total Points Allocated to Debt Accounts
+
+```{r Figure 4}
+
+fig4.dat <- data %>%
+  group_by(idturk, treatment) %>%
+  summarise(tot_points_ia_a1 = sum(points_ia_a1, na.rm = TRUE),
+            tot_points_ia_a2 = sum(points_ia_a2, na.rm = TRUE),
+            tot_points_ia_a3 = sum(points_ia_a3, na.rm = TRUE),
+            tot_points_ia_a4 = sum(points_ia_a4, na.rm = TRUE),
+            tot_points_aa_a1 = sum(points_aa_a1, na.rm = TRUE),
+            tot_points_aa_a2 = sum(points_aa_a2, na.rm = TRUE),
+            tot_points_aa_a3 = sum(points_aa_a3, na.rm = TRUE),
+            tot_points_aa_a4 = sum(points_aa_a4, na.rm = TRUE),
+            .groups = 'drop')
+
+fig4.dat <- fig4.dat %>% 
+  filter(!is.na(treatment))
+
+fig4.dat <- fig4.dat %>%
+  mutate(tot_points_a1 = tot_points_ia_a1 + tot_points_aa_a1,
+         tot_points_a2 = tot_points_ia_a2 + tot_points_aa_a2,
+         tot_points_a3 = tot_points_ia_a3 + tot_points_aa_a3,
+         tot_points_a4 = tot_points_ia_a4 + tot_points_aa_a4)
+
+fig4.dat <- fig4.dat %>%
+  mutate(tot_points_a3_aux = tot_points_a3,
+         tot_points_a3_aux = ifelse(treatment == 1, tot_points_a3_aux+25,tot_points_a3_aux),
+         tot_points_a3_aux = tot_points_a3_aux - 50)
+
+fig4.dat <- fig4.dat %>%
+  mutate(tot_points_a3_aux = ifelse(treatment == 1, tot_points_a3_aux - 25,
+                                    ifelse(treatment == 2, tot_points_a3_aux + 25,tot_points_a3_aux)))
+
+### aux
+ggplot() +
+  geom_histogram(data = filter(fig4.dat, treatment == 1),
+                 aes(x = tot_points_a3_aux, y = ..count../sum(..count..)*100),
+                 binwidth = 100, fill = "maroon", color = "maroon", alpha = 0.5, position = "identity") +
+  geom_histogram(data = filter(fig4.dat, treatment == 2),
+                 aes(x = tot_points_a3_aux, y = ..count../sum(..count..)*100),
+                 binwidth = 100, fill = "#008080", color = "#008080", alpha = 0.5, position = "identity") +
+  scale_x_continuous(breaks = seq(0, 3000, by = 500)) +
+  scale_y_continuous(breaks = seq(0, 60, by = 10)) +
+  labs(y = "Percent of Subjects", x = "Debt 1/Debt 1 (15 percent interest)") +
+  theme_minimal() +
+  theme(legend.position = "top") +
+  geom_vline(xintercept = 912, linetype = "dashed", color = "maroon", linewidth = 0.5) +
+  geom_vline(xintercept = 2812, linetype = "dashed", color = "#008080", linewidth = 0.5)
+
+### tot
+ggplot() +
+  geom_histogram(data = filter(fig4.dat, treatment == 1),
+                 aes(x = tot_points_a3, y = ..count../sum(..count..)*100),
+                 binwidth = 100, fill = "maroon", color = "maroon", alpha = 0.5, position = "dodge") +
+  geom_histogram(data = filter(fig4.dat, treatment == 2),
+                 aes(x = tot_points_a3, y = ..count../sum(..count..)*100),
+                 binwidth = 100, fill = "#008080", color = "#008080", alpha = 0.5, position = "dodge") +
+  scale_x_continuous(breaks = seq(0, 3000, by = 500)) +
+  scale_y_continuous(breaks = seq(0, 60, by = 10)) +
+  labs(y = "Percent of Subjects", x = "Debt 1/Debt 1 (15 percent interest)") +
+  theme_minimal() +
+  theme(legend.position = "top") +
+  geom_vline(xintercept = 912, linetype = "dashed", color = "maroon", linewidth = 0.5) +
+  geom_vline(xintercept = 2812, linetype = "dashed", color = "#008080", linewidth = 0.5)
+
+
+
+fig4.dat <- fig4.dat %>%
+  mutate(tot_points_a4_aux = tot_points_a4,
+         tot_points_a4_aux = ifelse(treatment == 1, tot_points_a4_aux+25,tot_points_a4_aux),
+         tot_points_a4_aux = tot_points_a4_aux - 50)
+
+fig4.dat <- fig4.dat %>%
+  mutate(tot_points_a4_aux = ifelse(treatment == 1, tot_points_a4_aux - 25,
+                                    ifelse(treatment == 2, tot_points_a4_aux + 25,tot_points_a4_aux)))
+
+### aux
+ggplot() +
+  geom_histogram(data = filter(fig4.dat, treatment == 1),
+                 aes(x = tot_points_a4_aux, y = ..count../sum(..count..)*100),
+                 binwidth = 100, fill = "maroon", color = "maroon", alpha = 0.5, position = "identity") +
+  geom_histogram(data = filter(fig4.dat, treatment == 2),
+                 aes(x = tot_points_a4_aux, y = ..count../sum(..count..)*100),
+                 binwidth = 100, fill = "#008080", color = "#008080", alpha = 0.5, position = "identity") +
+  scale_x_continuous(breaks = seq(0, 3500, by = 500)) +
+  scale_y_continuous(breaks = seq(0, 60, by = 10)) +
+  labs(y = "Percent of Subjects", x = "Debt 2/Debt 2 (5 percent interest)") +
+  theme_minimal() +
+  theme(legend.position = "top") +
+  geom_vline(xintercept = 1512, linetype = "dashed", color = "maroon", size = 0.5) +
+  geom_vline(xintercept = 3512, linetype = "dashed", color = "#008080", size = 0.5)
+
+
+### tot
+ggplot() +
+  geom_histogram(data = filter(fig4.dat, treatment == 1),
+                 aes(x = tot_points_a4, y = ..count../sum(..count..)*100),
+                 binwidth = 100, fill = "maroon", color = "maroon", alpha = 0.5, position = "dodge") +
+  geom_histogram(data = filter(fig4.dat, treatment == 2),
+                 aes(x = tot_points_a4, y = ..count../sum(..count..)*100),
+                 binwidth = 100, fill = "#008080", color = "#008080", alpha = 0.5, position = "dodge") +
+  scale_x_continuous(breaks = seq(0, 3500, by = 500)) +
+  scale_y_continuous(breaks = seq(0, 60, by = 10)) +
+  labs(y = "Percent of Subjects", x = "Debt 2/Debt 2 (5 percent interest)") +
+  theme_minimal() +
+  theme(legend.position = "top") +
+  geom_vline(xintercept = 1512, linetype = "dashed", color = "maroon", size = 0.5) +
+  geom_vline(xintercept = 3512, linetype = "dashed", color = "#008080", size = 0.5)
+
+```
+
+## Figure 5 - Percent of Subjects Who Maximize Returns in One-Shot Scenarios
+
+```{r Figure 5}
+
+# Filter data for day 4
+data <- data %>% filter(day == 4)
+
+# Share allocated to account 1
+data <- data %>%
+  mutate(perco_os_control = oneshotcontrol_s1 / 1000,
+         perco_os_debt = oneshotdebt_s1 / 1000,
+         perco_os_high = oneshothigh_s1 / 1000)
+
+# Indicator decision is optimal
+data <- data %>%
+  mutate(ind_perco_os_control = (perco_os_control == 1),
+         ind_perco_os_debt = (perco_os_debt == 1),
+         ind_perco_os_high = (perco_os_high == 1))
+
+#Control
+tab_control <- table(data$ind_perco_os_control, data$treatment)
+tab_control_col_perc <- prop.table(tab_control, 2) * 100
+tab.c = tab_control_col_perc[2,] %>% as.data.frame() %>% cbind(c("No-Debt", "Low-Debt", "High-Debt"))
+tab.c$one_shot_type = "One-Shot No-Debt"
+
+#Debt
+tab_debt <- table(data$ind_perco_os_debt, data$treatment)
+tab_debt_col_perc <- prop.table(tab_debt, 2) * 100
+tab.d = tab_debt_col_perc[2,] %>% as.data.frame() %>% cbind(c("No-Debt", "Low-Debt", "High-Debt"))
+tab.d$one_shot_type = "One-Shot Low-Debt"
+
+#High
+tab_high <- table(data$ind_perco_os_high, data$treatment)
+tab_high_col_perc <- prop.table(tab_high, 2) * 100
+tab.h = tab_high_col_perc[2,] %>% as.data.frame() %>% cbind(c("No-Debt", "Low-Debt", "High-Debt"))
+tab.h$one_shot_type = "One-Shot High-Debt"
+
+dat.fig5 = rbind(tab.c, tab.d, tab.h)
+colnames(dat.fig5)[c(1, 2)] = c("share", "type")
+
+dat.fig5$type = dat.fig5$type %>%
+  as.factor() %>%
+  fct_relevel("No-Debt", "Low-Debt", "High-Debt")
+
+dat.fig5$one_shot_type = dat.fig5$one_shot_type %>%
+  as.factor() %>%
+  fct_relevel("One-Shot No-Debt", "One-Shot Low-Debt", "One-Shot High-Debt")
+
+ggplot(dat.fig5, aes(x = type, y = share, fill = one_shot_type)) +
+  geom_col(position = position_dodge()) +
+  labs(x = NULL, y = "Share", fill = NULL, title = "Figure 5: Percent of Subjects Who Maximize Returns in One-Shot Scenarios") +
+  scale_fill_manual(values = c("#476a90", "#a33f49", "#5f9786")) +
+  scale_y_continuous(limits = c(0,80)) +
+  theme(legend.position = c(0.15,0.89), legend.box.background = element_rect(size = 1)) +
+  geom_text(aes(label=round(share, 2)), position=position_dodge(width=0.9), vjust=-0.25, size = 3)
+
+```
+
+## Table 5 - Redistribution Decisions: Share of Subjects Who Consolidate on Day 1
+
+```{r Table 5}
+
+# Load data
+tab5.dat <- read_dta("data/redistribution_work.dta")
+
+# Define treatment labels
+tab5.dat <- tab5.dat %>%
+  mutate(treatment = recode(treatment, `0` = "Red. No Debt", `1` = "Red. Debt"))
+
+# Consolidate variables and run regressions
+tab5.dat <- tab5.dat %>%
+  mutate(consolidateS1_aux = if_else(balance_a1 > 2500 & day == 1, 1, 0),
+         consolidateS2_aux = if_else(balance_a2 > 900 & day == 1, 1, 0),
+         consolidateS3_aux = if_else((balance_a3 > 900 & day == 1 & treatment == "Red. No Debt") |
+                                       (balance_a3 > -100 & day == 1 & treatment == "Red. Debt"), 1, 0),
+         consolidateS4_aux = if_else((balance_a4 > 4800 & day == 1 & treatment == "Red. No Debt") |
+                                       (balance_a4 > -3800 & day == 1 & treatment == "Red. Debt"), 1, 0))
+
+tab5.dat = tab5.dat %>% filter(day == 1)
+
+#Row1
+sav1 = feols(consolidateS1_aux ~ treatment, data = tab5.dat, vcov = "hetero") %>%
+  summary()
+nd.1 = sav1$coeftable[1,1] + sav1$coeftable[2,1]
+d.1 = sav1$coeftable[2,1]
+p.1 = sav1$coeftable[2,4]
+#Row2
+sav2 = feols(consolidateS2_aux ~ treatment, data = tab5.dat, vcov = "hetero") %>%
+  summary()
+nd.2 = sav2$coeftable[1,1] + sav2$coeftable[2,1]
+d.2 = sav2$coeftable[2,1]
+p.2 = sav2$coeftable[2,4]
+#Row3
+sav3 = feols(consolidateS3_aux ~ treatment, data = tab5.dat, vcov = "hetero") %>%
+  summary()
+nd.3 = sav3$coeftable[1,1] + sav3$coeftable[2,1]
+d.3 = sav3$coeftable[2,1]
+p.3 = sav3$coeftable[2,4]
+#Row4
+sav4 = feols(consolidateS4_aux ~ treatment, data = tab5.dat, vcov = "hetero") %>%
+  summary()
+nd.4 = sav4$coeftable[1,1] + sav4$coeftable[2,1]
+d.4 = sav4$coeftable[2,1]
+p.4 = sav4$coeftable[2,4]
+
+#Data
+df <- data.frame(
+  Redistribution = c("Savings 1", "Savings 2", "Savings 3/Debt 1", "Savings 4/Debt 2"),
+  Redistribution_No_Debt = c(nd.1, nd.2, nd.3, nd.4),
+  Redistribution_Debt = c(d.1, d.2, d.3, d.4),
+  p_value = c(p.1, p.2, p.3, p.4)
+)
+
+# Create table
+kable(df, col.names = c("Redistribution", "No Debt", "Debt", "p-value"), caption = "Table 5—Redistribution Decisions: Share of Subjects Who Consolidate on Day 1", align = 'c') %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive")) %>%
+  add_header_above(c(" " = 1, "Redistribution" = 2, " " = 1)) %>%
+  column_spec(2, bold = TRUE) %>%
+  footnote("Subjects are assigned to one category if they allocate more than the initial endowment to that account. This is only feasible if subjects redistribute balances from Savings 1 or Savings 2. With the exception of Savings 1, subjects can be classified in more than one category.")
+
+
+```
+
+## Figure 6 - Total Returns
+
+```{r Figure 6}
+
+# Load data
+dat.fig6 <- read_dta("data/redistribution_work.dta")
+
+# Sort data
+dat.fig6 <- dat.fig6 %>%
+  arrange(idturk, day)
+
+dat.fig6 = dat.fig6 %>%
+  group_by(idturk) %>%
+  mutate(initalendowment.lead = lead(initialendowment, 1)) %>%
+  ungroup()
+
+# Generate returns
+dat.fig6 <- dat.fig6 %>%
+  mutate(returns = ifelse(day == 4 & treatment == 1,
+                          round(balance_a1 * .2 + balance_a2 * .1 + balance_a3 * .15 + balance_a4 * .05 + balance_a5 * .15 + balance_a6 * .05, 1), 
+                          ifelse(day == 4 & treatment == 0,
+                                 round(balance_a1 * .2 + balance_a2 * .1 + balance_a3 * .15 + balance_a4 * .05 - balance_a5 * .15 - 2200 * .05, 1),
+                                 initalendowment.lead)))
+
+# Generate cumulative returns
+dat.fig6 = dat.fig6 %>%
+  filter(day != 0)
+
+dat.fig6 <- dat.fig6 %>%
+  group_by(idturk) %>%
+  mutate(cum_returns = cumsum(returns)) %>%
+  ungroup()
+
+#Day 4 only
+dat.fig6 = dat.fig6 %>%
+  filter(day == 4)
+
+dat.fig6 = dat.fig6 %>%
+  mutate(treatment = as.factor(treatment)) %>%
+  select(treatment, cum_returns)
+
+dat.fig6$treatment = ifelse(dat.fig6$treatment == 0, "Redistribution No Debt", " Redistribution Debt")
+
+dat.fig6$treatment = dat.fig6$treatment %>%
+  fct_relevel("Redistribution No Debt", " Redistribution Debt")
+
+#Plot
+ggplot(data = dat.fig6, aes(x = cum_returns, color = treatment)) +
+  stat_ecdf(size = 0.65) +
+  scale_color_manual(values = c("#476a90", "#a33f49")) +
+  theme(legend.position = c(0.2,0.85), legend.box.background = element_rect(size = 1)) +
+  xlim(1300, 3500) +
+  scale_y_continuous(labels = scales::number_format(accuracy = 0.1), limits = c(0,1)) +
+  labs(x = "Total returns", y = "Pr (total returns < x)", title = "Figure 6: Total Returns", color = NULL)
+
+```
+
+## Figure 7 - Percent of Subjects Who Borrow The Maximum Amount From Both Accounts
+
+```{r Figure 7}
+
+# Load the data
+data <- read_dta("data/borrowing_work.dta")
+
+# Values for the error bars
+model1 <- lm(borrow_max_both ~ factor(treatment), data = data %>% filter(day == 4))
+summary(model1)
+# Coefficients: -.2835366, CI: -.4331979 to -.1338753, Constant: .625
+
+model2 <- lm(borrow_max_both ~ factor(treatment), data = data %>% filter(day == 4 & ind_optimal_ia_all == 1))
+summary(model2)
+# Coefficients: -.5043956, CI: -.6921199 to -.3166713, Constant: .9615385
+
+# Prepare data for plotting
+data <- data %>% filter(day == 4)
+data <- data %>%
+  mutate(counter = 1) %>%
+  group_by(treatment) %>%
+  summarise(mean_borrow_max_both = mean(borrow_max_both, na.rm = TRUE),
+            sd_borrow_max_both = sd(borrow_max_both, na.rm = TRUE),
+            n = n()) %>%
+  mutate(optimal = 0)
+
+write_dta(data, "data/auxiliarBorrowing1.dta")
+
+data_optimal <- read_dta("data/borrowing_work.dta") %>%
+  filter(day == 4 & ind_optimal_ia_all == 1) %>%
+  mutate(counter = 1) %>%
+  group_by(treatment) %>%
+  summarise(mean_borrow_max_both = mean(borrow_max_both, na.rm = TRUE),
+            sd_borrow_max_both = sd(borrow_max_both, na.rm = TRUE),
+            n = n()) %>%
+  mutate(optimal = 1)
+
+write_dta(data_optimal, "data/auxiliarBorrowing2.dta")
+
+# Append data
+data_combined <- bind_rows(data, data_optimal)
+
+# Add error bars for the treatment difference
+data_combined <- data_combined %>%
+  mutate(hiwrite = ifelse(treatment == 1 & optimal == 0, (.625 - .2835366) + (.4331979 - .2835366), NA),
+         lowrite = ifelse(treatment == 1 & optimal == 0, (.625 - .2835366) - (.2835366 - .1338753), NA),
+         hiwrite = ifelse(treatment == 1 & optimal == 1, (.9615385 - .5043956) + (.6921199 - .5043956), hiwrite),
+         lowrite = ifelse(treatment == 1 & optimal == 1, (.9615385 - .5043956) - (.5043956 - .3166713), lowrite),
+         spacing = case_when(
+           treatment == 0 & optimal == 0 ~ 0.2,
+           treatment == 1 & optimal == 0 ~ 0.525,
+           treatment == 0 & optimal == 1 ~ 1.8,
+           treatment == 1 & optimal == 1 ~ 2.125
+         ))
+
+data_combined$treatment = ifelse(data_combined$treatment == 0, "Borrow-Savings", "Borrow-Debt")
+
+# Plot the graph
+ggplot(data_combined, aes(x = spacing, y = mean_borrow_max_both, fill = factor(treatment))) +
+  geom_bar(stat = "identity", position = "dodge", width = 0.3) +
+  geom_errorbar(aes(ymin = lowrite, ymax = hiwrite), width = 0.2, color = "black", alpha = 0.5) +
+  scale_fill_manual(values = c("Borrow-Savings" = "#476a90", "Borrow-Debt" = "#a33f49")) +
+  labs(y = "Percent of Subjects", x = NULL, fill = NULL, title = "Figure 7: Percent of Subjects Who Borrow the Maximum Amount From Both Accounts") +
+  theme(legend.position = c(0.2,0.85), legend.box.background = element_rect(size = 1)) +
+  scale_x_continuous(breaks = c(0.3625, 1.9625), labels = c("All subjects", "Only max returns")) +
+  scale_y_continuous(labels = scales::number_format(accuracy = 0.1), limits = c(0,1)) +
+  geom_text(aes(label=round(mean_borrow_max_both*100, 0)), position=position_dodge(width=0.9), vjust=-0.25, size = 3)
+
+```
+
+## Figure 8 - Total Points Borrowed From Each Account
+
+```{r Figure 8}
+
+# Load the data
+data <- read_dta("data/borrowing_work.dta")
+
+# Obtain points borrowed from each account
+data <- data %>%
+  mutate(tot_account5_aux = ifelse(is.na(treatment), -50, ifelse(treatment == 0, total_borrowsaving5 - 50, total_borrowdebt1 - 25)),
+         tot_account6_aux = ifelse(is.na(treatment), -50, ifelse(treatment == 0,total_borrowsaving6 - 50, total_borrowdebt2 - 25)))
+
+# Panel A
+ggplot(data = data, aes(x = tot_account5_aux, fill = factor(treatment), group = treatment)) +
+  geom_histogram(data = filter(data, treatment == 0),
+                 aes(x = tot_account5_aux, y = ..count../sum(..count..)*100),
+                 binwidth = 99, fill = "blue", color = "blue", alpha = 0.5, position = "identity") +
+  geom_histogram(data = filter(data, treatment == 1),
+                 aes(x = tot_account5_aux, y = ..count../sum(..count..)*100),
+                 binwidth = 99, fill = "red", color = "red", alpha = 0.5, position = "identity") +
+  theme_minimal() +
+  labs(y = "Percent of Subjects", x = "Points Allocated Savings 3 / Debt 1", fill = "Treatment") +
+  theme(legend.position = "bottom") +
+  scale_y_continuous(limits = c(0, 100), breaks = seq(0, 100, 20)) +
+  scale_x_continuous(limits = c(-50, 1700), breaks = seq(0, 1500, 500)) +
+  geom_vline(xintercept = 912, linetype = "dashed", color = "maroon", size = 0.4, alpha = 0.5)
+
+# Panel B
+ggplot(data, aes(x = tot_account6_aux, fill = factor(treatment))) +
+  geom_histogram(data = filter(data, treatment == 0),
+                 aes(x = tot_account6_aux, y = ..count../sum(..count..)*100),
+                 binwidth = 99, fill = "blue", color = "blue", alpha = 0.5, position = "identity") +
+  geom_histogram(data = filter(data, treatment == 1),
+                 aes(x = tot_account6_aux, y = ..count../sum(..count..)*100),
+                 binwidth = 99, fill = "red", color = "red", alpha = 0.5, position = "identity") +
+  theme_minimal() +
+  labs(y = "Percent of Subjects", x = "Points Allocated Savings 3 / Debt 1", fill = "Treatment") +
+  theme(legend.position = "bottom") +
+  scale_y_continuous(limits = c(0, 80), breaks = seq(0, 100, 20)) +
+  scale_x_continuous(limits = c(-50, 1700), breaks = seq(0, 1500, 500)) +
+  geom_vline(xintercept = 1500, linetype = "dashed", color = "maroon", size = 0.4, alpha = 0.5)
+
+```
+
+
+## Table 6 - Borrowing Treatments: Return and Payment Estimation Output
+
+```{r Table 6}
+
+# Load the data
+data <- read_dta("data/borrowing_work.dta")
+
+data$treatment = as.factor(data$treatment)
+data$demo_age_median = as.factor(data$demo_age_median)
+data$demo_sex = as.factor(data$demo_sex)
+data$demo_white = as.factor(data$demo_white)
+data$demo_collegeplus = as.factor(data$demo_collegeplus)
+data$demo_studentloan = as.factor(data$demo_studentloan)
+data$demo_holddebt = as.factor(data$demo_holddebt)
+data$demo_covid = as.factor(data$demo_covid)
+data$batch = as.factor(data$batch)
+
+# Cumulative returns
+data <- data %>%
+  arrange(idturk, day) %>%
+  group_by(idturk) %>%
+  mutate(cum_returns = sum(returns, na.rm = TRUE),
+         ln_cum_returns = log(cum_returns))
+
+# All subjects [1]
+borrow1 <- feols(ln_cum_returns ~ treatment + demo_age_median + demo_sex + demo_white + demo_collegeplus + demo_studentloan + demo_holddebt + demo_covid + error_count_total + batch, vcov = "hetero", data = filter(data, day == 4))
+
+# Max returns [2]
+borrow2 <- feols(ln_cum_returns ~ treatment + demo_age_median + demo_sex + demo_white + demo_collegeplus + demo_studentloan + demo_holddebt + demo_covid + error_count_total + batch, vcov = "hetero", data = filter(data, day == 4 & ind_optimal_ia_all == 1))
+
+# All subjects [3]
+borrow3 <- feols(ln_cum_returns ~ treatment + borrow_max_both + demo_age_median + demo_sex + demo_white + demo_collegeplus + demo_studentloan + demo_holddebt + demo_covid + error_count_total + batch, vcov = "hetero", data = filter(data, day == 4))
+
+modelsummary(
+  list("(1)" = borrow1, "(2)" = borrow2, "(3)" = borrow3), 
+  output = "kableExtra",
+  statistic = "std.error",
+  coef_omit = 3:18,
+  gof_omit = "A|B|S|R",
+  coef_rename = c("(Intercept)" = "Mean of dep.var.", "treatment1" = "Borrow-Debt", "borrow_max_both" = "Borrow Max"),
+  title = "Table 6 - Borrowing Treatments: Return and Payment Estimation Output",
+  notes = "Notes: Results from a linear regression with robust standard errors in parentheses. The dependent variable is the log of the cumulative returns in the four allocation decisions and the final payments that subjects obtained without the participation fee. Borrow Max is a dummy that equals 1 if the subject borrowed the maximum amount by the end of the experiment. The regression also includes several controls, including demographic characteristics. See online Appendix Table A.19 for the full output.",
+  col_names = c("", "(1)", "(2)", "(3)")
+) %>%
+  add_header_above(c("", "All subjects", "Max returns", "All subjects"))
+
+```
+
+## Table 7 - Estimates of Representative Lambda
+
+```{r Table 7}
+
+############################### No Debt
+
+# Load the data
+data_control <- read_delim("structural/lambdaMatrixControl.txt", delim = "\t")
+
+# Lambda at maximum threshold
+max_threshold <- max(data_control$threshold)
+lambda_max <- data_control %>% filter(threshold == max_threshold) %>% pull(lambda)
+lambda_at_max_threshold <- 1 + lambda_max
+
+# Noise adjusted lambda
+data_control_noise_adjusted <- data_control %>% filter(threshold <= 0.054)
+max_threshold_noise <- max(data_control_noise_adjusted$threshold)
+lambda_noise_adjusted <- data_control_noise_adjusted %>% filter(threshold == max_threshold_noise) %>% pull(lambda)
+lambda_at_noise_threshold <- 1 + lambda_noise_adjusted
+
+lambda.1 = lambda_max - 1
+lambda.adj.1 = lambda_noise_adjusted - 1
+
+############################### Low Debt
+
+# Load the data
+data_low_debt <- read_delim("structural/lambdaMatrix.txt", delim = "\t")
+
+# Lambda at maximum threshold
+max_threshold <- max(data_low_debt$threshold)
+lambda_max <- data_low_debt %>% filter(threshold == max_threshold) %>% pull(lambda)
+lambda_at_max_threshold <- 1 + lambda_max
+
+# Noise adjusted lambda
+data_low_debt_noise_adjusted <- data_low_debt %>% filter(threshold <= 0.054)
+max_threshold_noise <- max(data_low_debt_noise_adjusted$threshold)
+lambda_noise_adjusted <- data_low_debt_noise_adjusted %>% filter(threshold == max_threshold_noise) %>% pull(lambda)
+lambda_at_noise_threshold <- 1 + lambda_noise_adjusted
+
+lambda.2 = lambda_max - 1
+lambda.adj.2 = lambda_noise_adjusted - 1
+
+############################### Borrow Control
+
+# Load the data
+data_borrow_control <- read_delim("structural/lambdaMatrixborrowControl.txt", delim = "\t")
+
+# Lambda at maximum threshold
+max_threshold <- max(data_borrow_control$threshold)
+lambda_max <- data_borrow_control %>% filter(threshold == max_threshold) %>% pull(lambda)
+lambda_at_max_threshold <- 1 + lambda_max
+
+# Noise adjusted lambda
+data_borrow_control_noise_adjusted <- data_borrow_control %>% filter(threshold <= 0.054)
+max_threshold_noise <- max(data_borrow_control_noise_adjusted$threshold)
+lambda_noise_adjusted <- data_borrow_control_noise_adjusted %>% filter(threshold == max_threshold_noise) %>% pull(lambda)
+lambda_at_noise_threshold <- 1 + lambda_noise_adjusted
+
+lambda.3 = lambda_max - 1
+lambda.adj.3 = lambda_noise_adjusted - 1
+
+############################### Borrow Debt
+
+# Load the data
+data_borrow_debt <- read_delim("structural/lambdaMatrixborrowDebt.txt", delim = "\t")
+
+# Lambda at maximum threshold
+max_threshold <- max(data_borrow_debt$threshold)
+lambda_max <- data_borrow_debt %>% filter(threshold == max_threshold) %>% pull(lambda)
+lambda_at_max_threshold <- 1 + lambda_max
+
+# Noise adjusted lambda
+data_borrow_debt_noise_adjusted <- data_borrow_debt %>% filter(threshold <= 0.054)
+max_threshold_noise <- max(data_borrow_debt_noise_adjusted$threshold)
+lambda_noise_adjusted <- data_borrow_debt_noise_adjusted %>% filter(threshold == max_threshold_noise) %>% pull(lambda)
+lambda_at_noise_threshold <- 1 + lambda_noise_adjusted
+
+lambda.4 = lambda_max - 1
+lambda.adj.4 = lambda_noise_adjusted - 1
+
+############################### Redistribution Control
+
+# Load the data
+data_redistribution_control <- read_delim("structural/lambdaMatrixRedistributionNoDebt.txt", delim = "\t")
+
+# Lambda at maximum threshold
+max_threshold <- max(data_redistribution_control$threshold)
+lambda_max <- data_redistribution_control %>% filter(threshold == max_threshold) %>% pull(lambda)
+lambda_at_max_threshold <- 1 + lambda_max
+
+# Noise adjusted lambda
+data_redistribution_control_noise_adjusted <- data_redistribution_control %>% filter(threshold <= 0.054)
+max_threshold_noise <- max(data_redistribution_control_noise_adjusted$threshold)
+lambda_noise_adjusted <- data_redistribution_control_noise_adjusted %>% filter(threshold == max_threshold_noise) %>% pull(lambda)
+lambda_at_noise_threshold <- 1 + lambda_noise_adjusted
+
+lambda.5 = lambda_max - 1
+lambda.adj.5 = lambda_noise_adjusted - 1
+
+############################### Redistribution Debt
+
+# Load the data
+data_redistribution_debt <- read_delim("structural/lambdaMatrixRedistributionDebt.txt", delim = "\t")
+
+# Lambda at maximum threshold
+max_threshold <- max(data_redistribution_debt$threshold)
+lambda_max <- data_redistribution_debt %>% filter(threshold == max_threshold) %>% pull(lambda)
+lambda_at_max_threshold <- 1 + lambda_max
+
+# Noise adjusted lambda
+data_redistribution_debt_noise_adjusted <- data_redistribution_debt %>% filter(threshold <= 0.054)
+max_threshold_noise <- max(data_redistribution_debt_noise_adjusted$threshold)
+lambda_noise_adjusted <- data_redistribution_debt_noise_adjusted %>% filter(threshold == max_threshold_noise) %>% pull(lambda)
+lambda_at_noise_threshold <- 1 + lambda_noise_adjusted
+
+lambda.6 = lambda_max - 1
+lambda.adj.6 = lambda_noise_adjusted - 1
+
+############################### High Debt
+
+# Load the data
+data_high_debt <- read_delim("structural/lambdaMatrixHighDebt.txt", delim = "\t")
+
+# Lambda at maximum threshold
+max_threshold <- max(data_high_debt$threshold)
+lambda_max <- data_high_debt %>% filter(threshold == max_threshold) %>% pull(lambda)
+lambda_at_max_threshold <- 1 + lambda_max
+
+# Noise adjusted lambda
+data_high_debt_noise_adjusted <- data_high_debt %>% filter(threshold <= 0.054)
+max_threshold_noise <- max(data_high_debt_noise_adjusted$threshold)
+lambda_noise_adjusted <- data_high_debt_noise_adjusted %>% filter(threshold == max_threshold_noise) %>% pull(lambda)
+lambda_at_noise_threshold <- 1 + lambda_noise_adjusted
+
+lambda.7 = lambda_max - 1
+lambda.adj.7 = lambda_noise_adjusted - 1
+
+############################### One Shot
+
+# Load the data
+data_one_shot <- read_delim("structural/lambdaMatrixOneShot.txt", delim = "\t")
+
+# Lambda at maximum threshold
+max_threshold <- max(data_one_shot$threshold)
+lambda_max <- data_one_shot %>% filter(threshold == max_threshold) %>% pull(lambda)
+lambda_at_max_threshold <- 1 + lambda_max
+
+# Noise adjusted lambda
+data_one_shot_noise_adjusted <- data_one_shot %>% filter(threshold <= 0.054)
+max_threshold_noise <- max(data_one_shot_noise_adjusted$threshold)
+lambda_noise_adjusted <- data_one_shot_noise_adjusted %>% filter(threshold == max_threshold_noise) %>% pull(lambda)
+lambda_at_noise_threshold <- 1 + lambda_noise_adjusted
+
+lambda.8 = lambda_max - 1
+lambda.adj.8 = lambda_noise_adjusted - 1
+
+table.7 = data.frame(c(lambda.1, lambda.2, lambda.3, lambda.4, lambda.5, lambda.6, lambda.7, lambda.8), 
+                     c(lambda.adj.1, lambda.adj.2, lambda.adj.3, lambda.adj.4, lambda.adj.5, lambda.adj.6, lambda.adj.7, lambda.adj.8)) %>%
+  round(digits = 3)
+
+colnames(table.7) = c("Avg. Lambda", "Avg. Lambda Noise Adjusted")
+
+table.7
+
+lambda.1 = round(lambda.1, 3)
+lambda.2 = round(lambda.2, 3)
+lambda.3 = round(lambda.3, 3)
+lambda.4 = round(lambda.4, 3)
+lambda.5 = round(lambda.5, 3)
+lambda.6 = round(lambda.6, 3)
+lambda.7 = round(lambda.7, 3)
+lambda.8 = round(lambda.8, 3)
+
+lambda.adj.1 = round(lambda.adj.1, 3)
+lambda.adj.2 = round(lambda.adj.2, 3)
+lambda.adj.3 = round(lambda.adj.3, 3)
+lambda.adj.4 = round(lambda.adj.4, 3)
+lambda.adj.5 = round(lambda.adj.5, 3)
+lambda.adj.6 = round(lambda.adj.6, 3)
+lambda.adj.7 = round(lambda.adj.7, 3)
+lambda.adj.8 = round(lambda.adj.8, 3)
+
+# Data for the table
+table7 <- data.frame(
+  ` ` = c("Panel A. Main treatments", "No-Debt", "Low-Debt", 
+          "Panel B. Borrowing treatments", "Borrow-Control", "Borrow-Debt", 
+          "Panel C. Redistribution treatments", "Redistribution Control", "Redistribution Debt", 
+          "Panel D. Other treatments", "High-Debt", "One-Shot"),
+  `Average λˆ` = c("", lambda.1, lambda.2, "", lambda.3, lambda.4, "", lambda.5, lambda.6, "", lambda.7, lambda.8),
+  `Average λ ˆ(noise adjusted)` = c("", lambda.adj.1, lambda.adj.2, "", lambda.adj.3, lambda.adj.4, "", lambda.adj.5, lambda.adj.6, "", lambda.adj.7, lambda.adj.8)
+)
+
+# Create table
+kable(table7, 
+      col.names = c("", "Average λˆ", "Average λ ˆ(noise adjusted)"),
+      align = 'c', escape = FALSE) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive")) %>%
+  add_header_above(c(" " = 1, "Table 7 - Estimates of Representative Lambda" = 2)) %>%
+  footnote(general = "Notes: Noise adjusted corresponds to the average λ ˆ restricted to participants with an MSE no larger than 0.054. This refers to the MSE threshold for which no subject is mistakenly classified as debt-averse in the No-Debt treatment. By construction, the noise-adjusted average λˆ for No-Debt is 0. We report significance tests using a bootstrap method in online Appendix I.")
+
+
+```
+
+## Table 8 - Examples of Borrowing Decisions
+
+```{r Table 8}
+
+library(readxl)
+library(dplyr)
+
+# Function to replicate the Final Table from Excel
+replicate_final_table <- function(file_path) {
+  # Load data from Excel sheets
+  sheet2 <- read_excel(file_path, sheet = "Example 1 Charcoal Cookstove In")
+  sheet3 <- read_excel(file_path, sheet = "Example 2 -Consumption")
+  
+  # Helper function to safely convert to numeric
+  safe_as_numeric <- function(x) {
+    as.numeric(gsub("[^0-9.-]", "", x))
+  }
+  
+  # Extract parameters from Sheet 2
+  delta <- safe_as_numeric(sheet2[3, 3])
+  beta <- safe_as_numeric(sheet2[4, 3])
+  debt_interest <- safe_as_numeric(sheet2[5, 3])
+  
+  # Calculate lambda values, ensuring conversion is handled safely
+  lambda_values <- sapply(sheet2[2, 6:ncol(sheet2)], safe_as_numeric)
+  
+  # Example 1 calculations (Cost-Benefit for Charcoal Cookstove)
+  cost_loan <- sapply(sheet2[10:14, 4:ncol(sheet2)], safe_as_numeric)
+  monthly_benefit <- sapply(sheet2[11:14, 3:ncol(sheet2)], safe_as_numeric)
+  
+  # Check if values are correctly converted
+  print("Cost Loan Values:")
+  print(cost_loan)
+  print("Monthly Benefit Values:")
+  print(monthly_benefit)
+  
+  # Discount benefits and costs (using beta and delta)
+  discounted_benefits <- sapply(monthly_benefit, function(benefit) benefit / (1 + delta))
+  discounted_costs <- sapply(cost_loan, function(cost) cost / (1 + delta))
+  
+  # Example 2 calculations (Payday loan example)
+  delta_monthly <- safe_as_numeric(sheet3[3, 3])
+  beta_example2 <- safe_as_numeric(sheet3[4, 3])
+  debt_interest_example2 <- safe_as_numeric(sheet3[5, 3])
+  
+  # Compute APR or other metrics based on Sheet 3 data
+  apr_calculation <- function(interest, period) {
+    return((1 + interest)^(1/period) - 1) * 100  # Example formula for APR
+  }
+  
+  # Result Table (similar to Final Table)
+  final_result <- data.frame(
+    Parameter = c("Discounted Benefits", "Discounted Costs", "APR Calculation"),
+    Example1_Charcoal = c(sum(discounted_benefits, na.rm = TRUE), 
+                          sum(discounted_costs, na.rm = TRUE), 
+                          NA),
+    Example2_PaydayLoan = c(NA, NA, apr_calculation(debt_interest_example2, 12))
+  )
+  
+  return(final_result)
+}
+
+# Example usage
+final_table <- replicate_final_table("discussion/Calibration Exercise.xlsx")
+print(final_table)
+
+```
+
