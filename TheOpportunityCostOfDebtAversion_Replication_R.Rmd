@@ -129,6 +129,8 @@ ggplot(fig2.dat.plot, aes(x = spacing, y = mean_optimal, fill = factor(spacing))
 
 ```{r Figure 3}
 
+data <- read_dta("data/main_work.dta")
+
 fig3.dat <- data %>%
   group_by(idturk, treatment) %>%
   summarise(tot_points_ia_a1 = sum(points_ia_a1, na.rm = TRUE),
@@ -155,74 +157,80 @@ fig3.dat <- fig3.dat %>%
          tot_points_a3_aux = ifelse(treatment == 1, tot_points_a3_aux+25,tot_points_a3_aux),
          tot_points_a3_aux = tot_points_a3_aux - 50)
 
-### aux
+### Panel A
 ggplot() +
   geom_histogram(data = filter(fig3.dat, treatment == 0),
-                 aes(x = tot_points_a3_aux, y = ..count../sum(..count..)*100),
-                 binwidth = 100, fill = "#476a90", color = "#476a90", alpha = 0.5, position = "identity") +
+                 aes(x = tot_points_a3_aux, y = ..count../sum(..count..)*100, fill = "No-Debt", color = "#476a90"), color = "#476a90", binwidth = 100, alpha = 0.5, position = "identity") +
   geom_histogram(data = filter(fig3.dat, treatment == 1),
-                 aes(x = tot_points_a3_aux, y = ..count../sum(..count..)*100),
-                 binwidth = 100, fill = "#a33f49", color = "#a33f49", alpha = 0.5, position = "identity") +
+                 aes(x = tot_points_a3_aux, y = ..count../sum(..count..)*100, fill = "Low-Debt", color = "#a33f49"), color = "#a33f49", binwidth = 100, alpha = 0.5, position = "identity") +
   scale_x_continuous(breaks = seq(0, 1500, by = 500)) +
   scale_y_continuous(breaks = seq(0, 60, by = 10)) +
-  labs(y = "Percent of Subjects", x = "Points Allocated Savings 3 / Debt 1") +
-  geom_vline(xintercept = 912, linetype = "dashed", color = "#800000", linewidth = 0.4)
+  labs(y = "Percent of Subjects", title = "Points Allocated Savings 3 / Debt 1", x = NULL) +
+  geom_vline(xintercept = 912, linetype = "dashed", color = "#800000", linewidth = 0.4) +
+  scale_fill_manual(values = c("#a33f49", "#476a90"), NULL) +
+  theme(legend.position = c(0.2,0.89), legend.box.background = element_rect(size = 1))
 
-### tot
+### Robustness Check: Replace tot_points_a3_aux by tot_points_a3
 ggplot() +
   geom_histogram(data = filter(fig3.dat, treatment == 0),
-                 aes(x = tot_points_a3, y = ..count../sum(..count..)*100),
-                 binwidth = 100, fill = "#476a90", color = "#476a90", alpha = 0.5, position = "dodge") +
+                 aes(x = tot_points_a3, y = ..count../sum(..count..)*100, fill = "No-Debt", color = "#476a90"), binwidth = 100, color = "#476a90", alpha = 0.5, position = "dodge") +
   geom_histogram(data = filter(fig3.dat, treatment == 1),
-                 aes(x = tot_points_a3, y = ..count../sum(..count..)*100),
-                 binwidth = 100, fill = "#a33f49", color = "#a33f49", alpha = 0.5, position = "dodge") +
+                 aes(x = tot_points_a3, y = ..count../sum(..count..)*100, fill = "No-Debt", color = "#476a90"), binwidth = 100, color = "#a33f49", alpha = 0.5, position = "dodge") +
   scale_x_continuous(breaks = seq(0, 1500, by = 500)) +
   scale_y_continuous(breaks = seq(0, 60, by = 10)) +
   labs(y = "Percent of Subjects", x = "Points Allocated Savings 3 / Debt 1") +
   theme_minimal() +
   theme(legend.position = "none") +
-  geom_vline(xintercept = 912, linetype = "dashed", color = "#800000", linewidth = 0.4)
+  geom_vline(xintercept = 912, linetype = "dashed", color = "#800000", linewidth = 0.4) +
+  scale_fill_manual(values = c("#a33f49", "#476a90"), NULL) +
+  theme(legend.position = c(0.2,0.89), legend.box.background = element_rect(size = 1))
 
 fig3.dat <- fig3.dat %>%
   mutate(tot_points_a4_aux = tot_points_a4,
          tot_points_a4_aux = ifelse(treatment == 1, tot_points_a4_aux+25,tot_points_a4_aux),
          tot_points_a4_aux = tot_points_a4_aux - 50)
 
-### aux
+### Panel B
 ggplot() +
   geom_histogram(data = filter(fig3.dat, treatment == 0),
-                 aes(x = tot_points_a4_aux, y = ..count../sum(..count..)*100),
-                 binwidth = 100, fill = "#476a90", color = "#476a90", alpha = 0.5, position = "identity") +
+                 aes(x = tot_points_a4_aux, y = ..count../sum(..count..)*100, fill = "No Debt", color = "#476a90"),
+                 binwidth = 100, color = "#476a90", alpha = 0.5, position = "identity") +
   geom_histogram(data = filter(fig3.dat, treatment == 1),
-                 aes(x = tot_points_a4_aux, y = ..count../sum(..count..)*100),
-                 binwidth = 100, fill = "#a33f49", color = "#a33f49", alpha = 0.5, position = "identity") +
+                 aes(x = tot_points_a4_aux, y = ..count../sum(..count..)*100, fill = "Low Debt", color = "#a33f49"),
+                 binwidth = 100, color = "#a33f49", alpha = 0.5, position = "identity") +
   scale_x_continuous(breaks = seq(0, 2500, by = 500)) +
   scale_y_continuous(breaks = seq(0, 60, by = 10)) +
   labs(y = "Percent of Subjects", x = "Points Allocated Savings 4 / Debt 1") +
   theme_minimal() +
   theme(legend.position = "none") +
-  geom_vline(xintercept = 1512, linetype = "dashed", color = "#800000", linewidth = 0.4)
+  geom_vline(xintercept = 1512, linetype = "dashed", color = "#800000", linewidth = 0.4) +
+  scale_fill_manual(values = c("#a33f49", "#476a90"), NULL) +
+  theme(legend.position = c(0.2,0.89), legend.box.background = element_rect(size = 1))
 
-### tot
+### Robustness Check: Replace tot_points_a3_aux by tot_points_a3
 ggplot() +
   geom_histogram(data = filter(fig3.dat, treatment == 0),
-                 aes(x = tot_points_a4, y = ..count../sum(..count..)*100),
-                 binwidth = 100, fill = "#476a90", color = "#476a90", alpha = 0.5, position = "dodge") +
+                 aes(x = tot_points_a4, y = ..count../sum(..count..)*100, fill = "No Debt", color = "#476a90"),
+                 binwidth = 100, color = "#476a90", alpha = 0.5, position = "dodge") +
   geom_histogram(data = filter(fig3.dat, treatment == 1),
-                 aes(x = tot_points_a4, y = ..count../sum(..count..)*100),
-                 binwidth = 100, fill = "#a33f49", color = "#a33f49", alpha = 0.5, position = "dodge") +
+                 aes(x = tot_points_a4, y = ..count../sum(..count..)*100, fill = "Low Debt", color = "#a33f49"),
+                 binwidth = 100, color = "#a33f49", alpha = 0.5, position = "dodge") +
   scale_x_continuous(breaks = seq(0, 2500, by = 500)) +
   scale_y_continuous(breaks = seq(0, 60, by = 10)) +
   labs(y = "Percent of Subjects", x = "Points Allocated Savings 4 / Debt 1") +
   theme_minimal() +
   theme(legend.position = "none") +
-  geom_vline(xintercept = 1512, linetype = "dashed", color = "#800000", linewidth = 0.4)
+  geom_vline(xintercept = 1512, linetype = "dashed", color = "#800000", linewidth = 0.4) +
+  scale_fill_manual(values = c("#a33f49", "#476a90"), NULL) +
+  theme(legend.position = c(0.2,0.89), legend.box.background = element_rect(size = 1))
 
 ```
 
 ## Figure 4 - Total Points Allocated to Debt Accounts
 
 ```{r Figure 4}
+
+data <- read_dta("data/main_work.dta")
 
 fig4.dat <- data %>%
   group_by(idturk, treatment) %>%
@@ -254,39 +262,45 @@ fig4.dat <- fig4.dat %>%
   mutate(tot_points_a3_aux = ifelse(treatment == 1, tot_points_a3_aux - 25,
                                     ifelse(treatment == 2, tot_points_a3_aux + 25,tot_points_a3_aux)))
 
+#Panel A
+
 ### aux
 ggplot() +
   geom_histogram(data = filter(fig4.dat, treatment == 1),
-                 aes(x = tot_points_a3_aux, y = ..count../sum(..count..)*100),
-                 binwidth = 100, fill = "maroon", color = "maroon", alpha = 0.5, position = "identity") +
+                 aes(x = tot_points_a3_aux, y = ..count../sum(..count..)*100, fill = "Low-Debt", color = "#a33f49"),
+                 binwidth = 100, color = "#a33f49", alpha = 0.5, position = "identity") +
   geom_histogram(data = filter(fig4.dat, treatment == 2),
-                 aes(x = tot_points_a3_aux, y = ..count../sum(..count..)*100),
-                 binwidth = 100, fill = "#008080", color = "#008080", alpha = 0.5, position = "identity") +
+                 aes(x = tot_points_a3_aux, y = ..count../sum(..count..)*100, fill = "High-Debt", color = "#476a90"),
+                 binwidth = 100, color = "#476a90", alpha = 0.5, position = "identity") +
   scale_x_continuous(breaks = seq(0, 3000, by = 500)) +
   scale_y_continuous(breaks = seq(0, 60, by = 10)) +
-  labs(y = "Percent of Subjects", x = "Debt 1/Debt 1 (15 percent interest)") +
+  labs(y = "Percent of Subjects", title = "Debt 1/Debt 1 (15 percent interest)", x = NULL) +
   theme_minimal() +
   theme(legend.position = "top") +
-  geom_vline(xintercept = 912, linetype = "dashed", color = "maroon", linewidth = 0.5) +
-  geom_vline(xintercept = 2812, linetype = "dashed", color = "#008080", linewidth = 0.5)
+  geom_vline(xintercept = 912, linetype = "dashed", color = "#a33f49", linewidth = 0.5) +
+  geom_vline(xintercept = 2812, linetype = "dashed", color = "#476a90", linewidth = 0.5) +
+  scale_fill_manual(values = c("#476a90", "#a33f49"), NULL) +
+  theme(legend.position = c(0.2,0.89), legend.box.background = element_rect(size = 1))
 
 ### tot
 ggplot() +
   geom_histogram(data = filter(fig4.dat, treatment == 1),
-                 aes(x = tot_points_a3, y = ..count../sum(..count..)*100),
-                 binwidth = 100, fill = "maroon", color = "maroon", alpha = 0.5, position = "dodge") +
+                 aes(x = tot_points_a3, y = ..count../sum(..count..)*100, fill = "Low-Debt", color = "#a33f49"),
+                 binwidth = 100, color = "#a33f49", alpha = 0.5, position = "dodge") +
   geom_histogram(data = filter(fig4.dat, treatment == 2),
-                 aes(x = tot_points_a3, y = ..count../sum(..count..)*100),
-                 binwidth = 100, fill = "#008080", color = "#008080", alpha = 0.5, position = "dodge") +
+                 aes(x = tot_points_a3, y = ..count../sum(..count..)*100, fill = "High-Debt", color = "#476a90"),
+                 binwidth = 100, color = "#476a90", alpha = 0.5, position = "dodge") +
   scale_x_continuous(breaks = seq(0, 3000, by = 500)) +
   scale_y_continuous(breaks = seq(0, 60, by = 10)) +
-  labs(y = "Percent of Subjects", x = "Debt 1/Debt 1 (15 percent interest)") +
+  labs(y = "Percent of Subjects", title = "Debt 1/Debt 1 (15 percent interest)", x = NULL) +
   theme_minimal() +
   theme(legend.position = "top") +
-  geom_vline(xintercept = 912, linetype = "dashed", color = "maroon", linewidth = 0.5) +
-  geom_vline(xintercept = 2812, linetype = "dashed", color = "#008080", linewidth = 0.5)
+  geom_vline(xintercept = 912, linetype = "dashed", color = "#a33f49", linewidth = 0.5) +
+  geom_vline(xintercept = 2812, linetype = "dashed", color = "#476a90", linewidth = 0.5) +
+  scale_fill_manual(values = c("#476a90", "#a33f49"), NULL) +
+  theme(legend.position = c(0.2,0.89), legend.box.background = element_rect(size = 1))
 
-
+#Panel B
 
 fig4.dat <- fig4.dat %>%
   mutate(tot_points_a4_aux = tot_points_a4,
@@ -300,35 +314,39 @@ fig4.dat <- fig4.dat %>%
 ### aux
 ggplot() +
   geom_histogram(data = filter(fig4.dat, treatment == 1),
-                 aes(x = tot_points_a4_aux, y = ..count../sum(..count..)*100),
-                 binwidth = 100, fill = "maroon", color = "maroon", alpha = 0.5, position = "identity") +
+                 aes(x = tot_points_a4_aux, y = ..count../sum(..count..)*100, fill = "Low-Debt", color = "#a33f49"),
+                 binwidth = 100, color = "#a33f49", alpha = 0.5, position = "identity") +
   geom_histogram(data = filter(fig4.dat, treatment == 2),
-                 aes(x = tot_points_a4_aux, y = ..count../sum(..count..)*100),
-                 binwidth = 100, fill = "#008080", color = "#008080", alpha = 0.5, position = "identity") +
+                 aes(x = tot_points_a4_aux, y = ..count../sum(..count..)*100, fill = "High-Debt", color = "#476a90"),
+                 binwidth = 100, color = "#476a90", alpha = 0.5, position = "identity") +
   scale_x_continuous(breaks = seq(0, 3500, by = 500)) +
   scale_y_continuous(breaks = seq(0, 60, by = 10)) +
-  labs(y = "Percent of Subjects", x = "Debt 2/Debt 2 (5 percent interest)") +
+  labs(y = "Percent of Subjects", title = "Debt 2/Debt 2 (5 percent interest)", x = NULL) +
   theme_minimal() +
   theme(legend.position = "top") +
-  geom_vline(xintercept = 1512, linetype = "dashed", color = "maroon", size = 0.5) +
-  geom_vline(xintercept = 3512, linetype = "dashed", color = "#008080", size = 0.5)
+  geom_vline(xintercept = 1512, linetype = "dashed", color = "#a33f49", size = 0.5) +
+  geom_vline(xintercept = 3512, linetype = "dashed", color = "#476a90", size = 0.5) +
+  scale_fill_manual(values = c("#476a90", "#a33f49"), NULL) +
+  theme(legend.position = c(0.2,0.89), legend.box.background = element_rect(size = 1))
 
 
 ### tot
 ggplot() +
   geom_histogram(data = filter(fig4.dat, treatment == 1),
-                 aes(x = tot_points_a4, y = ..count../sum(..count..)*100),
-                 binwidth = 100, fill = "maroon", color = "maroon", alpha = 0.5, position = "dodge") +
+                 aes(x = tot_points_a4, y = ..count../sum(..count..)*100, fill = "Low-Debt", color = "#a33f49"),
+                 binwidth = 100, color = "#a33f49", alpha = 0.5, position = "dodge") +
   geom_histogram(data = filter(fig4.dat, treatment == 2),
-                 aes(x = tot_points_a4, y = ..count../sum(..count..)*100),
-                 binwidth = 100, fill = "#008080", color = "#008080", alpha = 0.5, position = "dodge") +
+                 aes(x = tot_points_a4, y = ..count../sum(..count..)*100, fill = "High-Debt", color = "#476a90"),
+                 binwidth = 100, color = "#476a90", alpha = 0.5, position = "dodge") +
   scale_x_continuous(breaks = seq(0, 3500, by = 500)) +
   scale_y_continuous(breaks = seq(0, 60, by = 10)) +
-  labs(y = "Percent of Subjects", x = "Debt 2/Debt 2 (5 percent interest)") +
+  labs(y = "Percent of Subjects", title = "Debt 2/Debt 2 (5 percent interest)", x = NULL) +
   theme_minimal() +
   theme(legend.position = "top") +
-  geom_vline(xintercept = 1512, linetype = "dashed", color = "maroon", size = 0.5) +
-  geom_vline(xintercept = 3512, linetype = "dashed", color = "#008080", size = 0.5)
+  geom_vline(xintercept = 1512, linetype = "dashed", color = "#a33f49", size = 0.5) +
+  geom_vline(xintercept = 3512, linetype = "dashed", color = "#476a90", size = 0.5) +
+  scale_fill_manual(values = c("#476a90", "#a33f49"), NULL) +
+  theme(legend.position = c(0.2,0.89), legend.box.background = element_rect(size = 1))
 
 ```
 
@@ -863,17 +881,17 @@ table7 <- data.frame(
           "Panel B. Borrowing treatments", "Borrow-Control", "Borrow-Debt", 
           "Panel C. Redistribution treatments", "Redistribution Control", "Redistribution Debt", 
           "Panel D. Other treatments", "High-Debt", "One-Shot"),
-  `Average λˆ` = c("", lambda.1, lambda.2, "", lambda.3, lambda.4, "", lambda.5, lambda.6, "", lambda.7, lambda.8),
-  `Average λ ˆ(noise adjusted)` = c("", lambda.adj.1, lambda.adj.2, "", lambda.adj.3, lambda.adj.4, "", lambda.adj.5, lambda.adj.6, "", lambda.adj.7, lambda.adj.8)
+  `Average Lambda` = c("", lambda.1, lambda.2, "", lambda.3, lambda.4, "", lambda.5, lambda.6, "", lambda.7, lambda.8),
+  `Average Lambda (noise adjusted)` = c("", lambda.adj.1, lambda.adj.2, "", lambda.adj.3, lambda.adj.4, "", lambda.adj.5, lambda.adj.6, "", lambda.adj.7, lambda.adj.8)
 )
 
 # Create table
 kable(table7, 
-      col.names = c("", "Average λˆ", "Average λ ˆ(noise adjusted)"),
+      col.names = c("", "Average Lambda", "Average Lambda (noise adjusted)"),
       align = 'c', escape = FALSE) %>%
   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive")) %>%
   add_header_above(c(" " = 1, "Table 7 - Estimates of Representative Lambda" = 2)) %>%
-  footnote(general = "Notes: Noise adjusted corresponds to the average λ ˆ restricted to participants with an MSE no larger than 0.054. This refers to the MSE threshold for which no subject is mistakenly classified as debt-averse in the No-Debt treatment. By construction, the noise-adjusted average λˆ for No-Debt is 0. We report significance tests using a bootstrap method in online Appendix I.")
+  footnote(general = "Notes: Noise adjusted corresponds to the average Lambda restricted to participants with an MSE no larger than 0.054. This refers to the MSE threshold for which no subject is mistakenly classified as debt-averse in the No-Debt treatment. By construction, the noise-adjusted average Lambda for No-Debt is 0. We report significance tests using a bootstrap method in online Appendix I.")
 
 
 ```
